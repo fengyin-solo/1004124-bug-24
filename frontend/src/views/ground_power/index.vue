@@ -43,9 +43,15 @@
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in columns" :key="column">
+            <button v-if="column === codeField" class="link" type="button" @click="openDetail(row)">
+              {{ row[column] || '—' }}
+            </button>
+            <template v-else>{{ row[column] === '' || row[column] == null ? '—' : row[column] }}</template>
+          </td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
+            <button class="link" type="button" @click="openDetail(row)">详情</button>
             <button
               v-for="action in actions"
               :key="action"
@@ -67,6 +73,27 @@
       <span>共 {{ total }} 条地面电源记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
+
+    <div v-if="detail" class="detail-mask" @click.self="closeDetail">
+      <div class="detail-panel" role="dialog" aria-modal="true" aria-label="地面电源详情">
+        <header class="detail-head">
+          <h3>地面电源详情</h3>
+          <button class="btn ghost" type="button" @click="closeDetail">关闭</button>
+        </header>
+        <table class="data-table">
+          <tbody>
+            <tr v-for="field in meta.fields" :key="field">
+              <th>{{ field }}</th>
+              <td>{{ detail[field] === '' || detail[field] == null ? '—' : detail[field] }}</td>
+            </tr>
+            <tr>
+              <th>当前状态</th>
+              <td>{{ detail.status }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -75,23 +102,28 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  getEntry,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { DEVICE_CODE_FIELD, DEVICE_STATUS_FIELD } from '@/data/device-rules'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('ground_power')
-const columns = ["设备编号", "设备类型", "所属机位", "输出电压", "额定电流", "供电开始", "供电结束", "设备状态"]
-const actions = ["开始供电", "结束供电", "停用报修"]
-const statuses = ["待机", "供电中", "已断电", "故障停用"]
-const stats = [{"label": "供电中设备", "value": 0}, {"label": "待机设备", "value": 0}, {"label": "故障设备", "value": 0}]
+// 字段、状态、动作只认模块元数据这一份，页面不再硬编码第二套字面量。
+const codeField = DEVICE_CODE_FIELD
+const columns = meta.fields.filter((field) => field !== DEVICE_STATUS_FIELD)
+const actions = meta.actions
+const statuses = meta.statuses
+const stats = meta.metrics.map((label) => ({ label, value: 0 }))
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const detail = ref<EntryRow | null>(null)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -112,6 +144,15 @@ function openCreate() {
   errorMessage.value = '地面电源登记入口尚未接入审批流'
 }
 
+// 详情与列表、导出走同一投影：这里拿到的状态就是共享规则给出的结论。
+function openDetail(row: EntryRow) {
+  detail.value = getEntry(meta.key, Number(row.id))
+}
+
+function closeDetail() {
+  detail.value = null
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
@@ -120,6 +161,9 @@ function runAction(action: string, row: EntryRow) {
     return
   }
   reload()
+  if (detail.value && Number(detail.value.id) === Number(row.id)) {
+    openDetail(row)
+  }
 }
 
 function reload() {

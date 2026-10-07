@@ -1,3 +1,4 @@
+import { DEVICE_RULE_BY_KEY, migrateDeviceRows } from './device-rules'
 import { SEED_ROWS } from './seed'
 import type { EntryRow } from './types'
 
@@ -8,8 +9,25 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+// 存量迁移：设备类模块按统一规则归一（旧字段名、历史故障写法、缺电压补空），迁移后立即落库。
+function migrateAll(data: Record<string, EntryRow[]>): Record<string, EntryRow[]> {
+  let changed = false
+  const next = { ...data }
+  for (const [key, rule] of DEVICE_RULE_BY_KEY) {
+    if (!(key in next)) {
+      continue
+    }
+    const rows = migrateDeviceRows(next[key], rule)
+    if (rows !== next[key]) {
+      next[key] = rows
+      changed = true
+    }
+  }
+  return changed ? next : data
+}
+
 function readStorage(): Record<string, EntryRow[]> {
-  const fallback = clone(SEED_ROWS)
+  const fallback = migrateAll(clone(SEED_ROWS))
   if (typeof window === 'undefined' || !window.localStorage) {
     return fallback
   }
@@ -20,7 +38,11 @@ function readStorage(): Record<string, EntryRow[]> {
   }
   try {
     const parsed = JSON.parse(raw) as Record<string, EntryRow[]>
-    return { ...fallback, ...parsed }
+    const merged = migrateAll({ ...fallback, ...parsed })
+    if (merged !== parsed) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+    }
+    return merged
   } catch {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback))
     return fallback

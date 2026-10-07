@@ -43,7 +43,7 @@
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in columns" :key="column">{{ row[column] === '' || row[column] == null ? '—' : row[column] }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -80,12 +80,14 @@ import {
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
+import { DEVICE_STATUS_FIELD } from '@/data/device-rules'
 
 const meta = moduleMeta('load_equip')
-const columns = ["设备编号", "设备类型", "适用机型", "最大载重", "安装位置", "购入日期", "维保记录", "设备状态"]
-const actions = ["启用设备", "安排维保", "申请报修"]
-const statuses = ["待机", "运行中", "维保中", "已报修"]
-const stats = [{"label": "运行中设备", "value": 0}, {"label": "维保中设备", "value": 0}, {"label": "报修设备", "value": 0}]
+// 装卸设备与地面电源共用同一份状态规则结论，页面字段/状态/动作只认元数据。
+const columns = meta.fields.filter((field) => field !== DEVICE_STATUS_FIELD)
+const actions = meta.actions
+const statuses = meta.statuses
+const stats = meta.metrics.map((label) => ({ label, value: 0 }))
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)

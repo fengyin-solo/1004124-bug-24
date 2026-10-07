@@ -1,4 +1,11 @@
 import type { ModuleMeta } from './types'
+import {
+  DEVICE_CODE_FIELD,
+  DEVICE_CURRENT_FIELD,
+  DEVICE_STAND_FIELD,
+  DEVICE_STATUS_FIELD,
+  DEVICE_VOLTAGE_FIELD,
+} from './device-rules'
 
 // 模块元数据由仓库生成时写入：字段、状态、动作、流转目标都在这里，页面不再各自写一遍。
 export const MODULES: ModuleMeta[] = [
@@ -29,7 +36,16 @@ export const MODULES: ModuleMeta[] = [
     name: "地面电源",
     entity: "地面电源",
     desc: "维护地面电源，围绕设备编号、设备类型、所属机位、输出电压做登记、筛选与状态流转。",
-    fields: ["设备编号", "设备类型", "所属机位", "输出电压", "额定电流", "供电开始", "供电结束", "设备状态"],
+    fields: [
+      DEVICE_CODE_FIELD,
+      "设备类型",
+      DEVICE_STAND_FIELD,
+      DEVICE_VOLTAGE_FIELD,
+      DEVICE_CURRENT_FIELD,
+      "供电开始",
+      "供电结束",
+      DEVICE_STATUS_FIELD,
+    ],
     statuses: ["待机", "供电中", "已断电", "故障停用"],
     actions: ["开始供电", "结束供电", "停用报修"],
     actionTargets: {"开始供电": "供电中", "结束供电": "已断电", "停用报修": "故障停用"},
@@ -183,7 +199,7 @@ export const MODULES: ModuleMeta[] = [
     name: "装卸设备",
     entity: "装卸设备",
     desc: "维护装卸设备，围绕设备编号、设备类型、适用机型、最大载重做登记、筛选与状态流转。",
-    fields: ["设备编号", "设备类型", "适用机型", "最大载重", "安装位置", "购入日期", "维保记录", "设备状态"],
+    fields: [DEVICE_CODE_FIELD, "设备类型", "适用机型", "最大载重", "安装位置", "购入日期", "维保记录", DEVICE_STATUS_FIELD],
     statuses: ["待机", "运行中", "维保中", "已报修"],
     actions: ["启用设备", "安排维保", "申请报修"],
     actionTargets: {"启用设备": "运行中", "安排维保": "维保中", "申请报修": "已报修"},
