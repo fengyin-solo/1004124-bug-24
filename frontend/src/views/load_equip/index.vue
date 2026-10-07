@@ -79,25 +79,26 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { countStatus, summarizeStatuses } from '@/data/status-rules'
 import type { EntryRow } from '@/data/types'
 
+// 字段、状态、动作只认 modules.ts 里登记的那一份，状态结论与地面电源共用同一份规则。
 const meta = moduleMeta('load_equip')
-const columns = ["设备编号", "设备类型", "适用机型", "最大载重", "安装位置", "购入日期", "维保记录", "设备状态"]
-const actions = ["启用设备", "安排维保", "申请报修"]
-const statuses = ["待机", "运行中", "维保中", "已报修"]
-const stats = [{"label": "运行中设备", "value": 0}, {"label": "维保中设备", "value": 0}, {"label": "报修设备", "value": 0}]
+const columns = meta.fields
+const actions = meta.actions
+const statuses = meta.statuses
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
-const statusSummary = computed(() =>
-  statuses.map((status: string) => ({
-    status,
-    count: rows.value.filter((row) => String(row.status) === status).length,
-  })),
-)
+const statusSummary = computed(() => summarizeStatuses(rows.value, statuses))
+const stats = computed(() => [
+  { label: '运行中设备', value: countStatus(rows.value, '运行中') },
+  { label: '维保中设备', value: countStatus(rows.value, '维保中') },
+  { label: '报修设备', value: countStatus(rows.value, '已报修') },
+])
 
 function resetFilters() {
   filters.value = {}

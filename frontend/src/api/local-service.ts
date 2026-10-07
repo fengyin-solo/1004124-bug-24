@@ -1,9 +1,7 @@
 import { MODULE_BY_KEY } from '@/data/modules'
-import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { allRows, listRows, mutateEntry, resetRows } from '@/data/local-store'
+import { clearIntermediateState, isNegativeAction, normalizeEntry } from '@/data/status-rules'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
-
-// 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
-const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -34,25 +32,32 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
   }
-  const rows = listRows(key)
-  const index = rows.findIndex((row) => Number(row.id) === id)
-  if (index < 0) {
+  const lastStatus = meta.statuses[meta.statuses.length - 1]
+  const negative = isNegativeAction(action)
+  const result = mutateEntry(key, id, (row) => {
+    const current = String(row.status)
+    if (current === target) {
+      // 同一设备并发提交同一个动作只生效一次：已是目标状态就不再重复写
+      return null
+    }
+    let updated: EntryRow = {
+      ...row,
+      status: target,
+      pending: target !== lastStatus,
+      abnormal: negative,
+    }
+    if (negative) {
+      // 停用报修要清除中间态：进行中的供电区间不再保留
+      updated = clearIntermediateState(updated)
+    }
+    return updated
+  })
+  if (!result.found) {
     return { ok: false, message: `没有找到编号为 ${id} 的${meta.entity}` }
   }
-  const current = String(rows[index].status)
-  if (current === target) {
+  if (!result.applied) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
-  const lastStatus = meta.statuses[meta.statuses.length - 1]
-  const updated: EntryRow = {
-    ...rows[index],
-    status: target,
-    pending: target !== lastStatus,
-    abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
-  }
-  const next = [...rows]
-  next[index] = updated
-  saveRows(key, next)
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 
@@ -66,7 +71,11 @@ export function exportEntries(key: string): { filename: string; content: string 
   const header = ['编号', ...meta.fields, '当前状态']
   const lines = [header.join(',')]
   for (const row of listRows(key)) {
-    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
+    // 导出与列表用同一份结论：缺字段按空补齐后再写
+    const normalized = normalizeEntry(row, meta.fields)
+    lines.push(
+      [normalized.id, ...meta.fields.map((field) => normalized[field] ?? ''), normalized.status].join(','),
+    )
   }
   return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
 }

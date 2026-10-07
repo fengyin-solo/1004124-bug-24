@@ -79,25 +79,27 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { countStatus, isPowerOff, summarizeStatuses } from '@/data/status-rules'
 import type { EntryRow } from '@/data/types'
 
+// 字段、状态、动作只认 modules.ts 里登记的那一份，页面不再各自写一遍。
 const meta = moduleMeta('ground_power')
-const columns = ["设备编号", "设备类型", "所属机位", "输出电压", "额定电流", "供电开始", "供电结束", "设备状态"]
-const actions = ["开始供电", "结束供电", "停用报修"]
-const statuses = ["待机", "供电中", "已断电", "故障停用"]
-const stats = [{"label": "供电中设备", "value": 0}, {"label": "待机设备", "value": 0}, {"label": "故障设备", "value": 0}]
+const columns = meta.fields
+const actions = meta.actions
+const statuses = meta.statuses
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
-const statusSummary = computed(() =>
-  statuses.map((status: string) => ({
-    status,
-    count: rows.value.filter((row) => String(row.status) === status).length,
-  })),
-)
+const statusSummary = computed(() => summarizeStatuses(rows.value, statuses))
+// 断电判定走共享状态规则：不在供电的状态都计入断电一侧。
+const stats = computed(() => [
+  { label: '供电中设备', value: rows.value.filter((row) => !isPowerOff(row.status)).length },
+  { label: '待机设备', value: countStatus(rows.value, '待机') },
+  { label: '故障设备', value: countStatus(rows.value, '故障停用') },
+])
 
 function resetFilters() {
   filters.value = {}

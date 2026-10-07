@@ -30,6 +30,7 @@ classes/
 *.local
 
 # ===== 包管理器 / 构建缓存 =====
+.verify-build/
 .npm/
 .cache/
 .parcel-cache/
